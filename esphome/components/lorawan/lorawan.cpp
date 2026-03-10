@@ -28,5 +28,19 @@ void LoRaWANComponent::loop() {}
 
 void LoRaWANComponent::send_uplink_() {}
 
+void LoRaWANComponent::dump_config() {
+  ESP_LOGCONFIG(TAG,
+                "LoraWAN Component:\n"
+                "  Chipset: %s\n"
+                "  Band: %d\n"
+                "  Sub Band: %d\n"
+                "  Join EUI: 0x%016llX\n"
+                "  Dev EUI: 0x%016llX\n"
+                "  App Key: %p\n"
+                "  NWK Key: %p\n",
+                this->chipset_.c_str(), this->band_, this->sub_band_, this->join_eui_, this->dev_eui_, this->app_key_,
+                this->nwk_key_);
+}
+
 }  // namespace lorawan
 }  // namespace esphome

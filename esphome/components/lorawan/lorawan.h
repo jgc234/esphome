@@ -25,6 +25,7 @@ class LoRaWANComponent : public Component, public LoraWanSpiRadioLibHal {
 
   void setup() override;
   void loop() override;
+  void dump_config() override;
 
  protected:
   InternalGPIOPin *reset_pin_{nullptr};

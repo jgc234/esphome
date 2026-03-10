@@ -46,14 +46,14 @@ CONFIG_SCHEMA = (
             cv.Required(CONF_DIO1_PIN): pins.internal_gpio_input_pin_schema,
             cv.Required(CONF_BAND): cv.enum(LORAWAN_BAND_INDEX_MAP),
             cv.Optional(CONF_SUBBAND, default=1): cv.positive_not_null_int,
-            cv.Required(CONF_JOIN_EUI): cv.hex_int_range(
-                min=0x0000000000000000, max=0xFFFFFFFFFFFFFFFF
+            cv.Required(CONF_JOIN_EUI): cv.hex_uint64_t,
+            cv.Required(CONF_DEV_EUI): cv.hex_uint64_t,
+            cv.Required(CONF_APP_KEY): cv.All(
+                cv.ensure_list(cv.hex_uint8_t), cv.Length(min=16, max=16)
             ),
-            cv.Required(CONF_DEV_EUI): cv.hex_int_range(
-                min=0x0000000000000000, max=0xFFFFFFFFFFFFFFFF
+            cv.Required(CONF_NWK_KEY): cv.All(
+                cv.ensure_list(cv.hex_uint8_t), cv.Length(min=16, max=16)
             ),
-            cv.Required(CONF_APP_KEY): cv.string,
-            cv.Required(CONF_NWK_KEY): cv.string,
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
