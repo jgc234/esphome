@@ -26,7 +26,6 @@ LORAWAN_BAND_INDEX_MAP = {
 }
 
 CONF_CHIPSET = "chipset"
-CONF_CS_PIN = "cs_pin"
 CONF_RESET_PIN = "reset_pin"
 CONF_BUSY_PIN = "busy_pin"
 CONF_DIO1_PIN = "dio1_pin"
@@ -42,7 +41,6 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(): cv.declare_id(LoRaWANComponent),
             cv.Required(CONF_CHIPSET): cv.string,
-            cv.Required(CONF_CS_PIN): pins.gpio_output_pin_schema,
             cv.Required(CONF_RESET_PIN): pins.gpio_output_pin_schema,
             cv.Required(CONF_BUSY_PIN): pins.gpio_input_pin_schema,
             cv.Required(CONF_DIO1_PIN): pins.gpio_input_pin_schema,
@@ -69,14 +67,16 @@ async def to_code(config):
     await spi.register_spi_device(var, config)
 
     cg.add(var.set_chipset(config[CONF_CHIPSET]))
-    cs_pin = await cg.gpio_pin_expression(config[CONF_CS_PIN])
-    cg.add(var.set_cs_pin(cs_pin))
+
     reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
     cg.add(var.set_reset_pin(reset_pin))
+
     busy_pin = await cg.gpio_pin_expression(config[CONF_BUSY_PIN])
     cg.add(var.set_busy_pin(busy_pin))
+
     dio1_pin = await cg.gpio_pin_expression(config[CONF_DIO1_PIN])
     cg.add(var.set_dio1_pin(dio1_pin))
+
     cg.add(var.set_band(config[CONF_BAND]))
     cg.add(var.set_sub_band(config[CONF_SUBBAND]))
     cg.add(var.set_join_eui(config[CONF_JOIN_EUI]))
