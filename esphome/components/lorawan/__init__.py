@@ -41,9 +41,9 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(): cv.declare_id(LoRaWANComponent),
             cv.Required(CONF_CHIPSET): cv.string,
-            cv.Required(CONF_RESET_PIN): pins.gpio_output_pin_schema,
-            cv.Required(CONF_BUSY_PIN): pins.gpio_input_pin_schema,
-            cv.Required(CONF_DIO1_PIN): pins.gpio_input_pin_schema,
+            cv.Required(CONF_RESET_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Required(CONF_BUSY_PIN): pins.internal_gpio_input_pin_schema,
+            cv.Required(CONF_DIO1_PIN): pins.internal_gpio_input_pin_schema,
             cv.Required(CONF_BAND): cv.enum(LORAWAN_BAND_INDEX_MAP),
             cv.Optional(CONF_SUBBAND, default=1): cv.positive_not_null_int,
             cv.Required(CONF_JOIN_EUI): cv.hex_int_range(

@@ -3,9 +3,9 @@
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 
-#include "lorawan_spi_hal.h"
-
 // do equivalent to ropg/LoRaWAN_ESP32
+
+#include "lorawan_spi_hal.h"
 
 namespace esphome {
 namespace lorawan {
@@ -13,10 +13,9 @@ namespace lorawan {
 class LoRaWANComponent : public Component, public LoraWanSpiRadioLibHal {
  public:
   void set_chipset(std::string chipset) { this->chipset_ = chipset; }
-  void set_cs_pin(GPIOPin *pin) { this->cs_pin_ = pin; }
-  void set_reset_pin(GPIOPin *pin) { this->reset_pin_ = pin; }
-  void set_busy_pin(GPIOPin *pin) { this->busy_pin_ = pin; }
-  void set_dio1_pin(GPIOPin *pin) { this->dio1_pin_ = pin; }
+  void set_reset_pin(InternalGPIOPin *pin) { this->reset_pin_ = pin; }
+  void set_busy_pin(InternalGPIOPin *pin) { this->busy_pin_ = pin; }
+  void set_dio1_pin(InternalGPIOPin *pin) { this->dio1_pin_ = pin; }
   void set_band(int band) { this->band_ = band; }
   void set_sub_band(uint8_t sub_band) { this->sub_band_ = sub_band; }
   void set_join_eui(uint64_t join_eui) { this->join_eui_ = join_eui; }
@@ -28,21 +27,20 @@ class LoRaWANComponent : public Component, public LoraWanSpiRadioLibHal {
   void loop() override;
 
  protected:
-  GPIOPin *cs_pin_;
-  GPIOPin *reset_pin_;
-  GPIOPin *busy_pin_;
-  GPIOPin *dio1_pin_;
+  InternalGPIOPin *reset_pin_{nullptr};
+  InternalGPIOPin *busy_pin_{nullptr};
+  InternalGPIOPin *dio1_pin_{nullptr};
   std::string chipset_;
   int band_;
   uint8_t sub_band_;
   uint64_t join_eui_;
   uint64_t dev_eui_;
-  uint8_t *app_key_;
-  uint8_t *nwk_key_;
-  SX1262 *radio_ = nullptr;
-  LoRaWANNode *node_ = nullptr;
-  bool joined_ = false;
-  unsigned long last_send_ = 0;
+  uint8_t *app_key_{nullptr};
+  uint8_t *nwk_key_{nullptr};
+  SX1262 *radio_{nullptr};
+  LoRaWANNode *node_{nullptr};
+  bool joined_{false};
+  unsigned long last_send_{0UL};
   void join_network_();
   void send_uplink_();
 };
