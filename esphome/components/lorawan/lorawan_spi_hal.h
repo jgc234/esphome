@@ -3,10 +3,10 @@
 #include "esphome/components/spi/spi.h"
 #include "esphome/core/log.h"
 
+#include <RadioLib.h>
+
 namespace esphome {
 namespace lorawan {
-
-#include <RadioLib.h>
 
 // This file provides a hardware abstraction layer for the RadioLib library,
 // using the ESPHome SPI and GPIO APIs. It implements the pure virtual methods

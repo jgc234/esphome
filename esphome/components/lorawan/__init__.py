@@ -67,21 +67,17 @@ async def to_code(config):
     await spi.register_spi_device(var, config)
 
     cg.add(var.set_chipset(config[CONF_CHIPSET]))
-
     reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
     cg.add(var.set_reset_pin(reset_pin))
-
     busy_pin = await cg.gpio_pin_expression(config[CONF_BUSY_PIN])
     cg.add(var.set_busy_pin(busy_pin))
-
     dio1_pin = await cg.gpio_pin_expression(config[CONF_DIO1_PIN])
     cg.add(var.set_dio1_pin(dio1_pin))
-
-    cg.add(var.set_band(config[CONF_BAND]))
+    # cg.add(var.set_band(config[CONF_BAND]))
     cg.add(var.set_sub_band(config[CONF_SUBBAND]))
     cg.add(var.set_join_eui(config[CONF_JOIN_EUI]))
     cg.add(var.set_dev_eui(config[CONF_DEV_EUI]))
-    cg.add(var.set_app_key(config[CONF_APP_KEY]))
-    cg.add(var.set_nwk_key(config[CONF_NWK_KEY]))
+    cg.add(var.set_app_key(cg.ArrayInitializer(*config[CONF_APP_KEY])))
+    cg.add(var.set_nwk_key(cg.ArrayInitializer(*config[CONF_NWK_KEY])))
 
     cg.add_library("jgromes/RadioLib", "7.6.0")
