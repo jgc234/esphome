@@ -14,11 +14,28 @@ void LoRaWANComponent::setup() {
 
   Module *module = new Module(this, RADIOLIB_NC, this->dio1_pin_->get_pin(), this->reset_pin_->get_pin(),
                               this->busy_pin_->get_pin());
-  this->radio_ = new SX1262(module);
 
-  int16_t state = radio_->begin();
-  if (state != RADIOLIB_ERR_NONE) {
-    ESP_LOGE(TAG, "Radio did not initialize. We'll try again later.");
+  PhysicalLayer *radio;
+
+  switch (this->chipset_) {
+    case Chipset_SX1262: {
+      SX1262 *radio = new SX1262(module);
+      radio->begin();
+      // this->radio_ = radio;
+      int16_t state = radio->begin();
+      if (state != RADIOLIB_ERR_NONE) {
+        ESP_LOGE(TAG, "Radio did not initialize. We'll try again later.");
+        return;
+      }
+      break;
+    }
+
+    case Chipset_SX1276: {
+      SX1276 *radio = new SX1276(module);
+      radio->begin();
+      this->radio_ = radio;
+      break;
+    }
   }
 }
 

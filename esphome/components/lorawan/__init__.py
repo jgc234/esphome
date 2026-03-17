@@ -8,21 +8,30 @@ CODEOWNERS = ["@jgc234"]
 DEPENDENCIES = ["spi"]
 
 lorawan_ns = cg.esphome_ns.namespace("lorawan")
+global_ns = cg.global_ns
 LoRaWANComponent = lorawan_ns.class_("LoRaWANComponent", cg.Component, spi.SPIDevice)
-BandList = lorawan_ns.enum("LoRaWANBandNum_t")
+BandList = global_ns.enum("LoRaWANBandNum_t")
+Chipset_t = lorawan_ns.enum("Chipset_t")
+lora_bn_ns = global_ns.namespace("LoRaWANBandNum_t")
+LoRaWANBandNum_t = lora_bn_ns.enum("LoRaWANBandNum_t")
+
+LORAWAN_CHIPSET_INDEX_MAP = {
+    "SX1262": Chipset_t.Chipset_SX1262,
+    "SX1268": Chipset_t.Chipset_SX1268,
+}
 
 LORAWAN_BAND_INDEX_MAP = {
-    "EU868": BandList.BandEU868,
-    "US915": BandList.BandUS915,
-    "EU433": BandList.BandEU433,
-    "AU915": BandList.BandAU915,
-    "CN470": BandList.BandCN470,
-    "AS923": BandList.BandAS923,
-    "AS923_2": BandList.BandAS923_2,
-    "AS923_3": BandList.BandAS923_3,
-    "AS923_4": BandList.BandAS923_4,
-    "KR920": BandList.BandKR920,
-    "IN865": BandList.BandIN865,
+    "EU868": LoRaWANBandNum_t.BandEU868,
+    "US915": LoRaWANBandNum_t.BandUS915,
+    "EU433": LoRaWANBandNum_t.BandEU433,
+    "AU915": LoRaWANBandNum_t.BandAU915,
+    "CN470": LoRaWANBandNum_t.BandCN470,
+    "AS923": LoRaWANBandNum_t.BandAS923,
+    "AS923_2": LoRaWANBandNum_t.BandAS923_2,
+    "AS923_3": LoRaWANBandNum_t.BandAS923_3,
+    "AS923_4": LoRaWANBandNum_t.BandAS923_4,
+    "KR920": LoRaWANBandNum_t.BandKR920,
+    "IN865": LoRaWANBandNum_t.BandIN865,
 }
 
 CONF_CHIPSET = "chipset"
@@ -40,7 +49,7 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(LoRaWANComponent),
-            cv.Required(CONF_CHIPSET): cv.string,
+            cv.Required(CONF_CHIPSET): cv.enum(LORAWAN_CHIPSET_INDEX_MAP),
             cv.Required(CONF_RESET_PIN): pins.internal_gpio_output_pin_schema,
             cv.Required(CONF_BUSY_PIN): pins.internal_gpio_input_pin_schema,
             cv.Required(CONF_DIO1_PIN): pins.internal_gpio_input_pin_schema,
@@ -66,14 +75,15 @@ async def to_code(config):
     await cg.register_component(var, config)
     await spi.register_spi_device(var, config)
 
-    cg.add(var.set_chipset(config[CONF_CHIPSET]))
+    #    cg.add(var.set_chipset(config[CONF_CHIPSET]))
     reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
     cg.add(var.set_reset_pin(reset_pin))
     busy_pin = await cg.gpio_pin_expression(config[CONF_BUSY_PIN])
     cg.add(var.set_busy_pin(busy_pin))
     dio1_pin = await cg.gpio_pin_expression(config[CONF_DIO1_PIN])
     cg.add(var.set_dio1_pin(dio1_pin))
-    # cg.add(var.set_band(config[CONF_BAND]))
+    cg.add(var.set_chipset(config[CONF_CHIPSET]))
+    cg.add(var.set_band(config[CONF_BAND]))
     cg.add(var.set_sub_band(config[CONF_SUBBAND]))
     cg.add(var.set_join_eui(config[CONF_JOIN_EUI]))
     cg.add(var.set_dev_eui(config[CONF_DEV_EUI]))
