@@ -9,31 +9,55 @@ static const char *const TAG = "lorawan";
 void LoRaWANComponent::setup() {
   ESP_LOGI(TAG, "Initializing SX1262...");
 
-  // at this stage we can't access the chip select pin because its owned by the
-  // upstream spi_device and the field is private.
+  // TODO: at this stage we can't access the chip select pin because its owned
+  // by the upstream spi_device and the field is private.
 
-  Module *module = new Module(this, RADIOLIB_NC, this->dio1_pin_->get_pin(), this->reset_pin_->get_pin(),
-                              this->busy_pin_->get_pin());
+  Module *module =
+      new Module(this, 8, this->dio1_pin_->get_pin(), this->reset_pin_->get_pin(), this->busy_pin_->get_pin());
 
   PhysicalLayer *radio;
 
   switch (this->chipset_) {
     case Chipset_SX1262: {
+      ESP_LOGI(TAG, "Chipset_SX1262 - Creating SX1262 instance...");
+
       SX1262 *radio = new SX1262(module);
-      radio->begin();
-      // this->radio_ = radio;
-      int16_t state = radio->begin();
+      this->radio_ = radio;
+      ESP_LOGI(TAG, "Creating lorawan node instance...");
+      this->node_ = new LoRaWANNode(radio, this->band_ptr_, this->sub_band_);
+      int16_t state;
+
+      ESP_LOGI(TAG, "Initializing radio...");
+
+      state = radio->begin();
       if (state != RADIOLIB_ERR_NONE) {
-        ESP_LOGE(TAG, "Radio did not initialize. We'll try again later.");
+        ESP_LOGE(TAG, "Radio did not initialize. Error code: %d", state);
         return;
       }
+
+      ESP_LOGI(TAG, "Radio initialized successfully!");
+      ESP_LOGI(TAG, "Initializing LoRaWAN node...");
+      state = this->node_->beginOTAA(this->join_eui_, this->dev_eui_, this->nwk_key_, this->app_key_);
+      if (state != RADIOLIB_ERR_NONE) {
+        ESP_LOGE(TAG, "Failed to start joining process. Error code: %d", state);
+        return;
+      }
+
+      ESP_LOGI(TAG, "Starting OTAA join process...");
+      state = this->node_->activateOTAA();
+      if (state != RADIOLIB_ERR_NONE) {
+        ESP_LOGE(TAG, "Failed to start joining process. Error code: %d", state);
+        return;
+      }
+
+      this->radio_ = radio;
       break;
     }
 
     case Chipset_SX1276: {
       SX1276 *radio = new SX1276(module);
-      radio->begin();
       this->radio_ = radio;
+      radio->begin();
       break;
     }
   }
@@ -48,14 +72,14 @@ void LoRaWANComponent::send_uplink_() {}
 void LoRaWANComponent::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "LoraWAN Component:\n"
-                "  Chipset: %s\n"
+                "  Chipset: %d\n"
                 "  Band: %d\n"
                 "  Sub Band: %d\n"
                 "  Join EUI: 0x%016llX\n"
                 "  Dev EUI: 0x%016llX\n"
                 "  App Key: %p\n"
                 "  NWK Key: %p\n",
-                this->chipset_.c_str(), this->band_, this->sub_band_, this->join_eui_, this->dev_eui_, this->app_key_,
+                this->chipset_, this->band_, this->sub_band_, this->join_eui_, this->dev_eui_, this->app_key_,
                 this->nwk_key_);
 }
 
