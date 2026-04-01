@@ -5,11 +5,10 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
 CODEOWNERS = ["@jgc234"]
-DEPENDENCIES = ["spi"]
 
 lorawan_ns = cg.esphome_ns.namespace("lorawan")
 global_ns = cg.global_ns
-LoRaWANComponent = lorawan_ns.class_("LoRaWANComponent", cg.Component, spi.SPIDevice)
+LoRaWANComponent = lorawan_ns.class_("LoRaWANComponent", cg.Component)
 BandList = global_ns.enum("LoRaWANBandNum_t")
 Chipset_t = lorawan_ns.enum("Chipset_t")
 lora_bn_ns = global_ns.namespace("LoRaWANBandNum_t")
@@ -35,6 +34,9 @@ LORAWAN_BAND_INDEX_MAP = {
 }
 
 CONF_CHIPSET = "chipset"
+CONF_CLK_PIN = "clk_pin"
+CONF_MISO_PIN = "miso_pin"
+CONF_MOSI_PIN = "mosi_pin"
 CONF_RESET_PIN = "reset_pin"
 CONF_BUSY_PIN = "busy_pin"
 CONF_DIO1_PIN = "dio1_pin"
@@ -50,6 +52,9 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(): cv.declare_id(LoRaWANComponent),
             cv.Required(CONF_CHIPSET): cv.enum(LORAWAN_CHIPSET_INDEX_MAP),
+            cv.Required(CONF_CLK_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Required(CONF_MISO_PIN): pins.internal_gpio_input_pin_schema,
+            cv.Required(CONF_MOSI_PIN): pins.internal_gpio_output_pin_schema,
             cv.Required(CONF_RESET_PIN): pins.internal_gpio_output_pin_schema,
             cv.Required(CONF_BUSY_PIN): pins.internal_gpio_input_pin_schema,
             cv.Required(CONF_DIO1_PIN): pins.internal_gpio_input_pin_schema,
@@ -80,6 +85,12 @@ async def to_code(config):
     cg.add(var.set_reset_pin(reset_pin))
     busy_pin = await cg.gpio_pin_expression(config[CONF_BUSY_PIN])
     cg.add(var.set_busy_pin(busy_pin))
+    clk_pin = await cg.gpio_pin_expression(config[CONF_CLK_PIN])
+    cg.add(var.set_clk_pin(clk_pin))
+    miso_pin = await cg.gpio_pin_expression(config[CONF_MISO_PIN])
+    cg.add(var.set_miso_pin(miso_pin))
+    mosi_pin = await cg.gpio_pin_expression(config[CONF_MOSI_PIN])
+    cg.add(var.set_mosi_pin(mosi_pin))
     dio1_pin = await cg.gpio_pin_expression(config[CONF_DIO1_PIN])
     cg.add(var.set_dio1_pin(dio1_pin))
     cg.add(var.set_chipset(config[CONF_CHIPSET]))

@@ -17,6 +17,9 @@ class LoRaWANComponent : public Component, public LoraWanSpiRadioLibHal {
  public:
   void set_chipset(Chipset_t chipset) { this->chipset_ = chipset; }
   void set_reset_pin(InternalGPIOPin *pin) { this->reset_pin_ = pin; }
+  void set_clk_pin(InternalGPIOPin *pin) { this->clk_pin_ = pin; }
+  void set_miso_pin(InternalGPIOPin *pin) { this->miso_pin_ = pin; }
+  void set_mosi_pin(InternalGPIOPin *pin) { this->mosi_pin_ = pin; }
   void set_busy_pin(InternalGPIOPin *pin) { this->busy_pin_ = pin; }
   void set_dio1_pin(InternalGPIOPin *pin) { this->dio1_pin_ = pin; }
   void set_band(LoRaWANBandNum_t band) {
@@ -37,6 +40,9 @@ class LoRaWANComponent : public Component, public LoraWanSpiRadioLibHal {
 
  protected:
   InternalGPIOPin *reset_pin_{nullptr};
+  InternalGPIOPin *clk_pin_{nullptr};
+  InternalGPIOPin *miso_pin_{nullptr};
+  InternalGPIOPin *mosi_pin_{nullptr};
   InternalGPIOPin *busy_pin_{nullptr};
   InternalGPIOPin *dio1_pin_{nullptr};
   Chipset_t chipset_;
