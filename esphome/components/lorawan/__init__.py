@@ -1,6 +1,5 @@
 from esphome import pins
 import esphome.codegen as cg
-from esphome.components import spi
 import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
@@ -37,6 +36,7 @@ CONF_CHIPSET = "chipset"
 CONF_CLK_PIN = "clk_pin"
 CONF_MISO_PIN = "miso_pin"
 CONF_MOSI_PIN = "mosi_pin"
+CONF_CS_PIN = "cs_pin"
 CONF_RESET_PIN = "reset_pin"
 CONF_BUSY_PIN = "busy_pin"
 CONF_DIO1_PIN = "dio1_pin"
@@ -47,38 +47,34 @@ CONF_DEV_EUI = "dev_eui"
 CONF_APP_KEY = "app_key"
 CONF_NWK_KEY = "nwk_key"
 
-CONFIG_SCHEMA = (
-    cv.Schema(
-        {
-            cv.GenerateID(): cv.declare_id(LoRaWANComponent),
-            cv.Required(CONF_CHIPSET): cv.enum(LORAWAN_CHIPSET_INDEX_MAP),
-            cv.Required(CONF_CLK_PIN): pins.internal_gpio_output_pin_schema,
-            cv.Required(CONF_MISO_PIN): pins.internal_gpio_input_pin_schema,
-            cv.Required(CONF_MOSI_PIN): pins.internal_gpio_output_pin_schema,
-            cv.Required(CONF_RESET_PIN): pins.internal_gpio_output_pin_schema,
-            cv.Required(CONF_BUSY_PIN): pins.internal_gpio_input_pin_schema,
-            cv.Required(CONF_DIO1_PIN): pins.internal_gpio_input_pin_schema,
-            cv.Required(CONF_BAND): cv.enum(LORAWAN_BAND_INDEX_MAP),
-            cv.Optional(CONF_SUBBAND, default=1): cv.positive_not_null_int,
-            cv.Required(CONF_JOIN_EUI): cv.hex_uint64_t,
-            cv.Required(CONF_DEV_EUI): cv.hex_uint64_t,
-            cv.Required(CONF_APP_KEY): cv.All(
-                cv.ensure_list(cv.hex_uint8_t), cv.Length(min=16, max=16)
-            ),
-            cv.Required(CONF_NWK_KEY): cv.All(
-                cv.ensure_list(cv.hex_uint8_t), cv.Length(min=16, max=16)
-            ),
-        }
-    )
-    .extend(cv.COMPONENT_SCHEMA)
-    .extend(spi.spi_device_schema(cs_pin_required=True))
-)
+CONFIG_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(): cv.declare_id(LoRaWANComponent),
+        cv.Required(CONF_CHIPSET): cv.enum(LORAWAN_CHIPSET_INDEX_MAP),
+        cv.Required(CONF_CLK_PIN): pins.internal_gpio_output_pin_schema,
+        cv.Required(CONF_MISO_PIN): pins.internal_gpio_input_pin_schema,
+        cv.Required(CONF_MOSI_PIN): pins.internal_gpio_output_pin_schema,
+        cv.Required(CONF_CS_PIN): pins.internal_gpio_output_pin_schema,
+        cv.Required(CONF_RESET_PIN): pins.internal_gpio_output_pin_schema,
+        cv.Required(CONF_BUSY_PIN): pins.internal_gpio_input_pin_schema,
+        cv.Required(CONF_DIO1_PIN): pins.internal_gpio_input_pin_schema,
+        cv.Required(CONF_BAND): cv.enum(LORAWAN_BAND_INDEX_MAP),
+        cv.Optional(CONF_SUBBAND, default=1): cv.positive_not_null_int,
+        cv.Required(CONF_JOIN_EUI): cv.hex_uint64_t,
+        cv.Required(CONF_DEV_EUI): cv.hex_uint64_t,
+        cv.Required(CONF_APP_KEY): cv.All(
+            cv.ensure_list(cv.hex_uint8_t), cv.Length(min=16, max=16)
+        ),
+        cv.Required(CONF_NWK_KEY): cv.All(
+            cv.ensure_list(cv.hex_uint8_t), cv.Length(min=16, max=16)
+        ),
+    }
+).extend(cv.COMPONENT_SCHEMA)
 
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
-    await spi.register_spi_device(var, config)
 
     #    cg.add(var.set_chipset(config[CONF_CHIPSET]))
     reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])

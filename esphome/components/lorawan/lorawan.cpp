@@ -12,8 +12,19 @@ void LoRaWANComponent::setup() {
   // TODO: at this stage we can't access the chip select pin because its owned
   // by the upstream spi_device and the field is private.
 
-  Module *module =
-      new Module(this, 8, this->dio1_pin_->get_pin(), this->reset_pin_->get_pin(), this->busy_pin_->get_pin());
+  // uint32_t cs, uint32_t irq, uint32_t rst, uint32_t gpio, SPIClass& spi, SPISettings spiSettings
+
+  hspi = new SPIClass(HSPI);
+
+  Module *module = new Module(this, this->cs_pin_->get_pin(), this->dio1_pin_->get_pin(), this->reset_pin_->get_pin(),
+                              this->busy_pin_->get_pin(), *hspi);
+
+  bool spi_setup_success =
+      hspi->begin(config.spi_clk_pin, config.spi_miso_pin, config.spi_mosi_pin, config.spi_nss_pin);
+  if (!spi_setup_success) {
+    ESP_LOGE(TAG, "Failed to initialize SPI");
+    return;
+  }
 
   PhysicalLayer *radio;
 
