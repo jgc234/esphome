@@ -37,6 +37,11 @@ void LoRaWANComponent::setup() {
 
       ESP_LOGI(TAG, "Radio initialized successfully!");
       ESP_LOGI(TAG, "Initializing LoRaWAN node...");
+      ESP_LOGI(TAG, "Joining network with OTAA...");
+      ESP_LOGI(TAG, "Join EUI: 0x%016llX", this->join_eui_);
+      ESP_LOGI(TAG, "Dev EUI: 0x%016llX", this->dev_eui_);
+      ESP_LOGI(TAG, "App Key: %p", this->app_key_);
+      ESP_LOGI(TAG, "NWK Key: %p", this->nwk_key_);
       state = this->node_->beginOTAA(this->join_eui_, this->dev_eui_, this->nwk_key_, this->app_key_);
       if (state != RADIOLIB_ERR_NONE) {
         ESP_LOGE(TAG, "Failed to start joining process. Error code: %d", state);

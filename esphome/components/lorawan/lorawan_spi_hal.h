@@ -4,6 +4,7 @@
 #include "esphome/core/log.h"
 
 #include <RadioLib.h>
+#include "driver/gpio.h"
 
 namespace esphome {
 namespace lorawan {
@@ -31,15 +32,18 @@ class LoraWanSpiRadioLibHal : public RadioLibHal, public EspHomeSpi {
   LoraWanSpiRadioLibHal() : EspHomeSpi(), RadioLibHal(RL_INPUT, RL_OUTPUT, RL_LOW, RL_HIGH, RL_RISING, RL_FALLING){};
 
   // implementations of pure virtual RadioLibHal methods
-  void pinMode(uint32_t pin, uint32_t mode) override {}
+  void pinMode(uint32_t pin, uint32_t mode) override {
+    gpio_set_direction(static_cast<gpio_num_t>(pin), mode == RL_OUTPUT ? GPIO_MODE_OUTPUT : GPIO_MODE_INPUT);
+  }
+
+  // these two are used for setting the chip select pin, but since we're using the SPI API directly we can ignore them
   void digitalWrite(uint32_t pin, uint32_t value) override {
     ESP_LOGD(TAG_HAL, "digitalWrite: pin=%u, value=%u", pin, value);
-    EspHomeSpi::write_byte(value & 0xFF);
+    gpio_set_level(static_cast<gpio_num_t>(pin), value);
   }
   uint32_t digitalRead(uint32_t pin) override {
     ESP_LOGD(TAG_HAL, "digitalRead: pin=%u", pin);
-    uint8_t value = EspHomeSpi::read_byte();
-    return (uint32_t) value;
+    return gpio_get_level(static_cast<gpio_num_t>(pin));
   }
   void attachInterrupt(uint32_t interruptNum, void (*interruptCb)(void), uint32_t mode) override {}
   void detachInterrupt(uint32_t interruptNum) override {}
@@ -50,7 +54,7 @@ class LoraWanSpiRadioLibHal : public RadioLibHal, public EspHomeSpi {
   long pulseIn(uint32_t pin, uint32_t state, RadioLibTime_t timeout) override { return 0; }
   void spiBegin() override { ESP_LOGD(TAG_HAL, "spiBegin"); }
   void spiBeginTransaction() override {
-    ESP_LOGD(TAG_HAL, "spiBeginTransaction");
+    // ESP_LOGD(TAG_HAL, "spiBeginTransaction");
     EspHomeSpi::enable();
   }
   void spiTransfer(uint8_t *out, size_t len, uint8_t *in) override {
@@ -60,7 +64,7 @@ class LoraWanSpiRadioLibHal : public RadioLibHal, public EspHomeSpi {
     }
   }
   void spiEndTransaction() override {
-    ESP_LOGD(TAG_HAL, "spiEndTransaction");
+    // ESP_LOGD(TAG_HAL, "spiEndTransaction");
     EspHomeSpi::disable();
   };
   void spiEnd() override{};

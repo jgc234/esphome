@@ -75,7 +75,7 @@ async def to_code(config):
     await cg.register_component(var, config)
     await spi.register_spi_device(var, config)
 
-    #    cg.add(var.set_chipset(config[CONF_CHIPSET]))
+    cg.add(var.set_chipset(config[CONF_CHIPSET]))
     reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
     cg.add(var.set_reset_pin(reset_pin))
     busy_pin = await cg.gpio_pin_expression(config[CONF_BUSY_PIN])
