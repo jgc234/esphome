@@ -20,14 +20,6 @@ AudioDecoder::AudioDecoder(size_t input_buffer_size, size_t output_buffer_size)
   this->output_transfer_buffer_ = AudioSinkTransferBuffer::create(output_buffer_size);
 }
 
-AudioDecoder::~AudioDecoder() {
-#ifdef USE_AUDIO_MP3_SUPPORT
-  if (this->audio_file_type_ == AudioFileType::MP3) {
-    esp_audio_libs::helix_decoder::MP3FreeDecoder(this->mp3_decoder_);
-  }
-#endif
-}
-
 esp_err_t AudioDecoder::add_source(std::weak_ptr<RingBuffer> &input_ring_buffer) {
   auto source = AudioSourceTransferBuffer::create(this->input_buffer_size_);
   if (source == nullptr) {
@@ -84,24 +76,18 @@ esp_err_t AudioDecoder::start(AudioFileType audio_file_type) {
   switch (this->audio_file_type_) {
 #ifdef USE_AUDIO_FLAC_SUPPORT
     case AudioFileType::FLAC:
-      this->flac_decoder_ = make_unique<esp_audio_libs::flac::FLACDecoder>();
-      // CRC check slows down decoding by 15-20% on an ESP32-S3. FLAC sources in ESPHome are either from an http source
-      // or built into the firmware, so the data integrity is already verified by the time it gets to the decoder,
-      // making the CRC check unnecessary.
-      this->flac_decoder_->set_crc_check_enabled(false);
+      this->flac_decoder_ = make_unique<micro_flac::FLACDecoder>();
       this->free_buffer_required_ =
           this->output_transfer_buffer_->capacity();  // Adjusted and reallocated after reading the header
+      this->decoder_buffers_internally_ = true;
       break;
 #endif
 #ifdef USE_AUDIO_MP3_SUPPORT
     case AudioFileType::MP3:
-      this->mp3_decoder_ = esp_audio_libs::helix_decoder::MP3InitDecoder();
-
-      // MP3 always has 1152 samples per chunk
-      this->free_buffer_required_ = 1152 * sizeof(int16_t) * 2;  // samples * size per sample * channels
-
-      // Always reallocate the output transfer buffer to the smallest necessary size
-      this->output_transfer_buffer_->reallocate(this->free_buffer_required_);
+      this->mp3_decoder_ = make_unique<micro_mp3::Mp3Decoder>();
+      this->free_buffer_required_ =
+          this->output_transfer_buffer_->capacity();  // Adjusted and reallocated after reading the header
+      this->decoder_buffers_internally_ = true;
       break;
 #endif
 #ifdef USE_AUDIO_OPUS_SUPPORT
@@ -112,6 +98,7 @@ esp_err_t AudioDecoder::start(AudioFileType audio_file_type) {
       this->decoder_buffers_internally_ = true;
       break;
 #endif
+#ifdef USE_AUDIO_WAV_SUPPORT
     case AudioFileType::WAV:
       this->wav_decoder_ = make_unique<esp_audio_libs::wav_decoder::WAVDecoder>();
       this->wav_decoder_->reset();
@@ -123,6 +110,7 @@ esp_err_t AudioDecoder::start(AudioFileType audio_file_type) {
         this->output_transfer_buffer_->reallocate(this->free_buffer_required_);
       }
       break;
+#endif
     case AudioFileType::NONE:
     default:
       return ESP_ERR_NOT_SUPPORTED;
@@ -240,9 +228,11 @@ AudioDecoderState AudioDecoder::decode(bool stop_gracefully) {
           state = this->decode_opus_();
           break;
 #endif
+#ifdef USE_AUDIO_WAV_SUPPORT
         case AudioFileType::WAV:
           state = this->decode_wav_();
           break;
+#endif
         case AudioFileType::NONE:
         default:
           state = FileDecoderState::IDLE;
@@ -268,59 +258,45 @@ AudioDecoderState AudioDecoder::decode(bool stop_gracefully) {
 
 #ifdef USE_AUDIO_FLAC_SUPPORT
 FileDecoderState AudioDecoder::decode_flac_() {
-  if (!this->audio_stream_info_.has_value()) {
-    // Header hasn't been read
-    auto result = this->flac_decoder_->read_header(this->input_buffer_->data(), this->input_buffer_->available());
+  size_t bytes_consumed, samples_decoded;
 
-    if (result > esp_audio_libs::flac::FLAC_DECODER_HEADER_OUT_OF_DATA) {
-      // Serrious error reading FLAC header, there is no recovery
-      return FileDecoderState::FAILED;
+  micro_flac::FLACDecoderResult result = this->flac_decoder_->decode(
+      this->input_buffer_->data(), this->input_buffer_->available(), this->output_transfer_buffer_->get_buffer_end(),
+      this->output_transfer_buffer_->free(), bytes_consumed, samples_decoded);
+
+  if (result == micro_flac::FLAC_DECODER_SUCCESS) {
+    if (samples_decoded > 0 && this->audio_stream_info_.has_value()) {
+      this->output_transfer_buffer_->increase_buffer_length(
+          this->audio_stream_info_.value().samples_to_bytes(samples_decoded));
     }
-
-    size_t bytes_consumed = this->flac_decoder_->get_bytes_index();
     this->input_buffer_->consume(bytes_consumed);
+  } else if (result == micro_flac::FLAC_DECODER_HEADER_READY) {
+    // Header just parsed, stream info now available
+    const auto &info = this->flac_decoder_->get_stream_info();
+    this->audio_stream_info_ = audio::AudioStreamInfo(info.bits_per_sample(), info.num_channels(), info.sample_rate());
 
-    if (result == esp_audio_libs::flac::FLAC_DECODER_HEADER_OUT_OF_DATA) {
-      return FileDecoderState::MORE_TO_PROCESS;
-    }
-
-    // Reallocate the output transfer buffer to the smallest necessary size
-    this->free_buffer_required_ = flac_decoder_->get_output_buffer_size_bytes();
+    // Reallocate the output transfer buffer to the required size
+    this->free_buffer_required_ = this->flac_decoder_->get_output_buffer_size_samples() * info.bytes_per_sample();
     if (!this->output_transfer_buffer_->reallocate(this->free_buffer_required_)) {
-      // Couldn't reallocate output buffer
       return FileDecoderState::FAILED;
     }
-
-    this->audio_stream_info_ =
-        audio::AudioStreamInfo(this->flac_decoder_->get_sample_depth(), this->flac_decoder_->get_num_channels(),
-                               this->flac_decoder_->get_sample_rate());
-
-    return FileDecoderState::MORE_TO_PROCESS;
-  }
-
-  uint32_t output_samples = 0;
-  auto result = this->flac_decoder_->decode_frame(this->input_buffer_->data(), this->input_buffer_->available(),
-                                                  this->output_transfer_buffer_->get_buffer_end(), &output_samples);
-
-  if (result == esp_audio_libs::flac::FLAC_DECODER_ERROR_OUT_OF_DATA) {
-    // Not an issue, just needs more data that we'll get next time.
-    return FileDecoderState::POTENTIALLY_FAILED;
-  }
-
-  size_t bytes_consumed = this->flac_decoder_->get_bytes_index();
-  this->input_buffer_->consume(bytes_consumed);
-
-  if (result > esp_audio_libs::flac::FLAC_DECODER_ERROR_OUT_OF_DATA) {
-    // Corrupted frame, don't retry with current buffer content, wait for new sync
-    return FileDecoderState::POTENTIALLY_FAILED;
-  }
-
-  // We have successfully decoded some input data and have new output data
-  this->output_transfer_buffer_->increase_buffer_length(
-      this->audio_stream_info_.value().samples_to_bytes(output_samples));
-
-  if (result == esp_audio_libs::flac::FLAC_DECODER_NO_MORE_FRAMES) {
+    this->input_buffer_->consume(bytes_consumed);
+  } else if (result == micro_flac::FLAC_DECODER_END_OF_STREAM) {
+    this->input_buffer_->consume(bytes_consumed);
     return FileDecoderState::END_OF_FILE;
+  } else if (result == micro_flac::FLAC_DECODER_NEED_MORE_DATA) {
+    this->input_buffer_->consume(bytes_consumed);
+    return FileDecoderState::MORE_TO_PROCESS;
+  } else if (result == micro_flac::FLAC_DECODER_ERROR_OUTPUT_TOO_SMALL) {
+    // Reallocate to decode the frame on the next call
+    const auto &info = this->flac_decoder_->get_stream_info();
+    this->free_buffer_required_ = this->flac_decoder_->get_output_buffer_size_samples() * info.bytes_per_sample();
+    if (!this->output_transfer_buffer_->reallocate(this->free_buffer_required_)) {
+      return FileDecoderState::FAILED;
+    }
+  } else {
+    ESP_LOGE(TAG, "FLAC decoder failed: %d", static_cast<int>(result));
+    return FileDecoderState::POTENTIALLY_FAILED;
   }
 
   return FileDecoderState::MORE_TO_PROCESS;
@@ -329,51 +305,56 @@ FileDecoderState AudioDecoder::decode_flac_() {
 
 #ifdef USE_AUDIO_MP3_SUPPORT
 FileDecoderState AudioDecoder::decode_mp3_() {
-  // Look for the next sync word
-  int buffer_length = (int) this->input_buffer_->available();
-  int32_t offset = esp_audio_libs::helix_decoder::MP3FindSyncWord(this->input_buffer_->data(), buffer_length);
+  // microMP3's samples_decoded value is samples per channel; e.g., what ESPHome typically calls an audio frame.
+  // microMP3 uses the term frame to refer to an MP3 frame: an encoded packet that contains multiple audio frames.
+  size_t bytes_consumed = 0;
+  size_t samples_decoded = 0;
 
-  if (offset < 0) {
-    // New data may have the sync word
-    this->input_buffer_->consume(buffer_length);
+  // microMP3 buffers internally: it consumes from our input buffer at its own pace, emits MP3_STREAM_INFO_READY once
+  // the first frame header is parsed, and only then produces PCM. It handles sync-word search and ID3v2 tag skipping.
+  micro_mp3::Mp3Result result = this->mp3_decoder_->decode(
+      this->input_buffer_->data(), this->input_buffer_->available(), this->output_transfer_buffer_->get_buffer_end(),
+      this->output_transfer_buffer_->free(), bytes_consumed, samples_decoded);
+
+  this->input_buffer_->consume(bytes_consumed);
+
+  if (result == micro_mp3::MP3_OK) {
+    if (samples_decoded > 0 && this->audio_stream_info_.has_value()) {
+      this->output_transfer_buffer_->increase_buffer_length(
+          this->audio_stream_info_.value().frames_to_bytes(samples_decoded));
+    }
+  } else if (result == micro_mp3::MP3_STREAM_INFO_READY) {
+    // First successful header parse: capture stream info and resize the output buffer to fit one full frame.
+    // microMP3 always outputs 16-bit PCM.
+    this->audio_stream_info_ =
+        audio::AudioStreamInfo(16, this->mp3_decoder_->get_channels(), this->mp3_decoder_->get_sample_rate());
+    this->free_buffer_required_ =
+        this->mp3_decoder_->get_samples_per_frame() * this->mp3_decoder_->get_channels() * sizeof(int16_t);
+    if (!this->output_transfer_buffer_->reallocate(this->free_buffer_required_)) {
+      return FileDecoderState::FAILED;
+    }
+  } else if (result == micro_mp3::MP3_NEED_MORE_DATA) {
+    return FileDecoderState::MORE_TO_PROCESS;
+  } else if (result == micro_mp3::MP3_OUTPUT_BUFFER_TOO_SMALL) {
+    // Reallocate to decode the frame on the next call
+    if (this->mp3_decoder_->get_channels() > 0) {
+      this->free_buffer_required_ =
+          this->mp3_decoder_->get_samples_per_frame() * this->mp3_decoder_->get_channels() * sizeof(int16_t);
+    } else {
+      // Fallback to worst-case size if channel info isn't available
+      this->free_buffer_required_ = this->mp3_decoder_->get_min_output_buffer_bytes();
+    }
+    if (!this->output_transfer_buffer_->reallocate(this->free_buffer_required_)) {
+      return FileDecoderState::FAILED;
+    }
+  } else if (result == micro_mp3::MP3_DECODE_ERROR) {
+    // Corrupt frame skipped; recoverable, retry on next call
+    ESP_LOGW(TAG, "MP3 decoder skipped a corrupt frame");
     return FileDecoderState::POTENTIALLY_FAILED;
-  }
-
-  // Advance read pointer to match the offset for the syncword
-  this->input_buffer_->consume(offset);
-  const uint8_t *buffer_start = this->input_buffer_->data();
-
-  buffer_length = (int) this->input_buffer_->available();
-  int err = esp_audio_libs::helix_decoder::MP3Decode(this->mp3_decoder_, &buffer_start, &buffer_length,
-                                                     (int16_t *) this->output_transfer_buffer_->get_buffer_end(), 0);
-
-  size_t consumed = this->input_buffer_->available() - buffer_length;
-  this->input_buffer_->consume(consumed);
-
-  if (err) {
-    switch (err) {
-      case esp_audio_libs::helix_decoder::ERR_MP3_OUT_OF_MEMORY:
-        [[fallthrough]];
-      case esp_audio_libs::helix_decoder::ERR_MP3_NULL_POINTER:
-        return FileDecoderState::FAILED;
-        break;
-      default:
-        // Most errors are recoverable by moving on to the next frame, so mark as potentailly failed
-        return FileDecoderState::POTENTIALLY_FAILED;
-        break;
-    }
   } else {
-    esp_audio_libs::helix_decoder::MP3FrameInfo mp3_frame_info;
-    esp_audio_libs::helix_decoder::MP3GetLastFrameInfo(this->mp3_decoder_, &mp3_frame_info);
-    if (mp3_frame_info.outputSamps > 0) {
-      int bytes_per_sample = (mp3_frame_info.bitsPerSample / 8);
-      this->output_transfer_buffer_->increase_buffer_length(mp3_frame_info.outputSamps * bytes_per_sample);
-
-      if (!this->audio_stream_info_.has_value()) {
-        this->audio_stream_info_ =
-            audio::AudioStreamInfo(mp3_frame_info.bitsPerSample, mp3_frame_info.nChans, mp3_frame_info.samprate);
-      }
-    }
+    // MP3_ALLOCATION_FAILED, MP3_INPUT_INVALID, or any future error -- not recoverable
+    ESP_LOGE(TAG, "MP3 decoder failed: %d", static_cast<int>(result));
+    return FileDecoderState::FAILED;
   }
 
   return FileDecoderState::MORE_TO_PROCESS;
@@ -418,6 +399,7 @@ FileDecoderState AudioDecoder::decode_opus_() {
 }
 #endif
 
+#ifdef USE_AUDIO_WAV_SUPPORT
 FileDecoderState AudioDecoder::decode_wav_() {
   if (!this->audio_stream_info_.has_value()) {
     // Header hasn't been processed
@@ -464,6 +446,7 @@ FileDecoderState AudioDecoder::decode_wav_() {
 
   return FileDecoderState::END_OF_FILE;
 }
+#endif
 
 }  // namespace audio
 }  // namespace esphome
